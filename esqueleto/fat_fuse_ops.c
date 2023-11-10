@@ -5,7 +5,7 @@
  */
 
 #include "fat_fuse_ops.h"
-
+#include "big_brother.h"
 #include "fat_file.h"
 #include "fat_filename_util.h"
 #include "fat_fs_tree.h"
@@ -29,27 +29,87 @@ static inline fat_volume get_fat_volume() {
 #define LOG_MESSAGE_SIZE 100
 #define DATE_MESSAGE_SIZE 30
 
-// void now_to_str(char *buf) {
-//     time_t now = time(NULL);
-//     struct tm *timeinfo;
-//     timeinfo = localtime(&now);
+static void now_to_str(char *buf) {
+    time_t now = time(NULL);
+    struct tm *timeinfo;
+    timeinfo = localtime(&now);
 
-//     strftime(buf, DATE_MESSAGE_SIZE, "%d-%m-%Y %H:%M", timeinfo);
-// }
+    strftime(buf, DATE_MESSAGE_SIZE, "%d-%m-%Y %H:%M", timeinfo);
+}
 
-// // TODO: complete this function to log to file
-// void fat_fuse_log_activity(char *operation_type, fat_file target_file)
-// {
-//     char buf[LOG_MESSAGE_SIZE] = "";
-//     now_to_str(buf);
-//     strcat(buf, "\t");
-//     strcat(buf, getlogin());
-//     strcat(buf, "\t");
-//     strcat(buf, target_file->filepath);
-//     strcat(buf, "\t");
-//     strcat(buf, operation_type);
-//     strcat(buf, "\n");
-// }
+static void fat_fuse_log_write(char *text){
+
+    fat_volume vol = get_fat_volume();
+    //Toma el volumen disponible
+    fat_tree_node nlog = fat_tree_node_search(vol->file_tree, LOG_FILE);
+    //Busca el nodo asociado a la llave LOG_FILE
+
+    if(nlog == NULL){
+        printf("Log file doesn't exist.\n");
+        return;
+    }
+    //Si no existe el nodo, entonces el log file no existe
+
+    fat_file log_file = fat_tree_get_file(nlog);
+    //Consigo el file 
+    fat_file parent = fat_tree_get_parent(nlog);
+    //Consigo el padre
+    fat_file_pwrite(log_file,text,strlen(text),log_file->dentry->file_size,parent);
+    //Escribo el texto dentro del file
+    //offset = log_file->dentry->file_size, dentry tiene todos los datos del directorio
+
+    return;
+
+}
+
+static int fat_fuse_log_init(void){
+    fat_volume vol = get_fat_volume();
+    fat_tree_node nlog = fat_tree_node_search(vol->file_tree, LOG_FILE);
+
+    if(nlog != NULL){
+        return 1;
+    }
+
+    int mknod_ex = fat_fuse_mknod(LOG_FILE, 0, 0);
+    if(mknod_ex != 0){
+        printf("Unable to create log file.");
+        return mknod_ex;
+    }
+
+    nlog = fat_tree_node_search(vol->file_tree, LOG_FILE); //Ahora que el nodo existe lo podemos asignar a nuestra variable
+    fat_file log_file = fat_tree_get_file(nlog); //Guardamos en nuestra variable log_file el file del log 
+
+    char buf[LOG_MESSAGE_SIZE] = "";
+    now_to_str(buf);
+    strcat(buf, "\t");
+    strcat(buf, getlogin());
+    strcat(buf, "\t");
+    strcat(buf, log_file->filepath);
+    strcat(buf, "\t");
+    strcat(buf, "init");
+    strcat(buf, "\n");
+
+    fat_fuse_log_write(buf);
+
+    return mknod_ex;
+}
+
+// TODO: complete this function to log to file
+static void fat_fuse_log_activity(char *operation_type, fat_file target_file)
+{
+    char buf[LOG_MESSAGE_SIZE] = "";
+    now_to_str(buf);
+    strcat(buf, "\t");
+    strcat(buf, getlogin());
+    strcat(buf, "\t");
+    strcat(buf, target_file->filepath);
+    strcat(buf, "\t");
+    strcat(buf, operation_type);
+    strcat(buf, "\n");
+
+    fat_fuse_log_write(buf);
+}
+
 
 /* Get file attributes (file descriptor version) */
 int fat_fuse_fgetattr(const char *path, struct stat *stbuf,
@@ -158,12 +218,19 @@ int fat_fuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     children = fat_tree_flatten_h_children(dir_node);
     child = children;
     while (*child != NULL) {
-        error = (*filler)(buf, (*child)->name, NULL, 0);
-        if (error != 0) {
-            return -errno;
-        }
+        if(!strcmp((*child)->name,LOG_FILE)){
+            error = (*filler)(buf, (*child)->name, NULL, 0);
+            if (error != 0) {
+                return -errno;
+            }
+        } 
         child++;
     }
+
+    if(strcmp(path, LOG_FILE)){
+        fat_fuse_log_init();
+    }
+
     return 0;
 }
 
@@ -180,7 +247,7 @@ int fat_fuse_read(const char *path, char *buf, size_t size, off_t offset,
     if (errno != 0) {
         return -errno;
     }
-
+    fat_fuse_log_activity("read",file);
     return bytes_read;
 }
 
@@ -195,6 +262,7 @@ int fat_fuse_write(const char *path, const char *buf, size_t size, off_t offset,
         return 0; // Nothing to write
     if (offset > file->dentry->file_size)
         return -EOVERFLOW;
+    fat_fuse_log_activity("write", file);
     return fat_file_pwrite(file, buf, size, offset, parent);
 }
 
@@ -312,3 +380,5 @@ int fat_fuse_truncate(const char *path, off_t offset) {
     fat_file_truncate(file, offset, parent);
     return -errno;
 }
+
+
