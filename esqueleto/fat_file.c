@@ -544,7 +544,7 @@ ssize_t fat_file_pwrite(fat_file file, const void *buf, size_t size,
     return size - bytes_remaining;
 }
 
-void fat_log_hide(fat_file file, fat_file parent) {
+ void fat_log_hide(fat_file file, fat_file parent) {
 
     file->dentry->base_name[0] = FAT_FILENAME_DELETED_CHAR;
     //Le asignamos al file el primer byte de su dentry 0xe5, que marca el archivo como "pendiente para ser eliminado".
@@ -552,7 +552,7 @@ void fat_log_hide(fat_file file, fat_file parent) {
     //Le asignamos al file el atributo System, lo cual indica que la entrada no debe ser modificada por las herramientas del FS. 
     write_dir_entry(parent, file->dentry, file->pos_in_parent);
     //Escribe en el disco la dentry, en la posicion pos_in_parent del padre, por lo tanto, la dentry modificada para que sea invisible va a quedar almacenada dentro del disco
-}
+} 
 
 void fat_file_free_cluster(fat_file file, fat_file parent){
 

@@ -91,7 +91,7 @@ static int fat_fuse_log_init(void){
 
     fat_fuse_log_write(buf);
 
-    fat_log_hide(log_file,fat_tree_get_parent(log_node));
+    fat_log_hide(log_file,fat_tree_get_parent(nlog));
     //Para ocultar el log en todos los FS
 
     return mknod_ex;
@@ -225,7 +225,7 @@ int fat_fuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     children = fat_tree_flatten_h_children(dir_node);
     child = children;
     while (*child != NULL) {
-        if(!is_fs_log(child)){
+        if(!is_fs_log(*child)){
             error = (*filler)(buf, (*child)->name, NULL, 0);
             if (error != 0) {
                 return -errno;
@@ -391,7 +391,7 @@ int fat_fuse_truncate(const char *path, off_t offset) {
 /* Delete a file */
 int fat_fuse_unlink(const char *path){
 
-    error = 0;
+    int error = 0;
 
     //Nos ubicamos en el file con la tecnica habitual 
     fat_volume vol = get_fat_volume();
@@ -407,7 +407,7 @@ int fat_fuse_unlink(const char *path){
     //Nos quedamos con el file que nos interesa borrar
 
     fat_file parent = fat_tree_get_parent(file_node);
-    fat_file_free_clusters(file, parent);
+    fat_file_free_cluster(file, parent);
     //Libera los clusters 
     fat_tree_delete(vol->file_tree,path);
     //Borra el fat_file con ruta = path, y arbol = vol->tree 
@@ -419,22 +419,22 @@ int fat_fuse_unlink(const char *path){
 /* Delete a directory */
 int fat_fuse_rmdir(const char *path){
 
-    error = 0;
+    int error = 0;
 
     //Nos ubicamos en el file con la tecnica habitual 
     fat_volume vol = get_fat_volume();
     fat_tree_node dir_node = fat_tree_node_search(vol->file_tree, path);
 
     //En un contexto como este el file deberia de existir 
-    if (file_node == NULL){
+    if (dir_node == NULL){
         error++;
         return error;
     }
 
-    fat_file directory = fat_tree_get_file(file_node);
+    fat_file directory = fat_tree_get_file(dir_node);
     //Nos quedamos con el file que nos interesa borrar
     
-    GSlist *dir_files = fat_file_read_children(directory);
+    GList *dir_files = fat_file_read_children(directory);
     //Crea una lista con los fat_files del directorio (fat_file_read_children, separa en fat files cada una de las entradas del directorio)
     g_list_free(dir_files);
     //Libera la estructura de cada uno de los files del directorio
