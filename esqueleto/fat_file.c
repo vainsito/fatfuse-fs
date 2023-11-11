@@ -17,6 +17,7 @@
 #include "fat_filename_util.h"
 #include "fat_table.h"
 #include "fat_util.h"
+#include "big_brother.h"
 
 static void write_dir_entry(fat_file parent, fat_dir_entry child_disk_entry,
                             u32 nentry);
@@ -354,6 +355,7 @@ static void read_cluster_dir_entries(u8 *buffer, fat_dir_entry end_ptr,
     u32 dir_entries_processed = 0;
     for (disk_dentry_ptr = (fat_dir_entry)buffer; disk_dentry_ptr <= end_ptr;
          disk_dentry_ptr++, dir_entries_processed++) {
+        dir->dir.nentries = dir_entries_processed;
         if (is_end_of_directory(disk_dentry_ptr)) {
             dir->children_read = 1;
             break;
@@ -361,12 +363,13 @@ static void read_cluster_dir_entries(u8 *buffer, fat_dir_entry end_ptr,
         if (ignore_dentry(disk_dentry_ptr)) {
             continue;
         }
+        
         // Create and fill new child structure
         fat_dir_entry new_entry = init_direntry_from_buff(disk_dentry_ptr);
         fat_file child = init_file_from_dentry(new_entry, dir);
         (*elems) = g_list_append((*elems), child);
     }
-    dir->dir.nentries = dir_entries_processed;
+    
 }
 
 GList *fat_file_read_children(fat_file dir) {
@@ -542,4 +545,14 @@ ssize_t fat_file_pwrite(fat_file file, const void *buf, size_t size,
     write_dir_entry(parent, file->dentry, file->pos_in_parent);
 
     return size - bytes_remaining;
+}
+
+void fat_file_log_hide(fat_file file, fat_file parent){
+    g_assert(file != NULL && parent != NULL);
+    DEBUG("Hiding fs log file %s", file->filepath);
+
+    file->dentry->base_name[0] = FAT_FILENAME_DELETED_CHAR;
+    file->dentry->attribs = FILE_ATTRIBUTE_SYSTEM;
+
+    write_dir_entry(parent, file->dentry, file->pos_in_parent);
 }

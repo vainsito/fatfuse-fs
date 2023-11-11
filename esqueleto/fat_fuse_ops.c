@@ -86,10 +86,19 @@ static int fat_fuse_log_init(void){
     strcat(buf, "\t");
     strcat(buf, log_file->filepath);
     strcat(buf, "\t");
-    strcat(buf, "init");
+    strcat(buf, "INIT");
     strcat(buf, "\n");
 
     fat_fuse_log_write(buf);
+
+    fat_file nlog_parent = fat_tree_get_parent(nlog);
+
+    if(nlog == NULL){
+        DEBUG("log parent is NULL, not able to hide");
+        return 1;
+    }
+
+    fat_file_log_hide(log_file, nlog_parent);
 
     return mknod_ex;
 }
@@ -191,6 +200,10 @@ static void fat_fuse_read_children(fat_tree_node dir_node) {
     }
 }
 
+static int is_fs_log(fat_file file){
+    return (fat_file_cmp_path(file, LOG_FILE) == 0);
+}
+
 /* Add entries of a directory in @fi to @buf using @filler function. */
 int fat_fuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                      off_t offset, struct fuse_file_info *fi) {
@@ -218,7 +231,7 @@ int fat_fuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     children = fat_tree_flatten_h_children(dir_node);
     child = children;
     while (*child != NULL) {
-        if(!strcmp((*child)->name,LOG_FILE)){
+        if(!is_fs_log(*child)){
             error = (*filler)(buf, (*child)->name, NULL, 0);
             if (error != 0) {
                 return -errno;
@@ -226,10 +239,7 @@ int fat_fuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
         } 
         child++;
     }
-
-    if(strcmp(path, LOG_FILE)){
-        fat_fuse_log_init();
-    }
+    fat_fuse_log_init();
 
     return 0;
 }
