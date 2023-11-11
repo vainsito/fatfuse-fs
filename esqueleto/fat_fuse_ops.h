@@ -21,5 +21,7 @@ int fat_fuse_utime(const char *path, struct utimbuf *buf);
 int fat_fuse_truncate(const char *path, off_t offset);
 int fat_fuse_write(const char *path, const char *buf, size_t size, off_t offset,
                    struct fuse_file_info *fi);
+int fat_fuse_rmdir(const char *path);
+int fat_fuse_unlink(const char *path);
 
 #endif /* _FAT_FS_OPS_H */
