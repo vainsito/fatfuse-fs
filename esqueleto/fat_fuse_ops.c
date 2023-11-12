@@ -29,6 +29,9 @@ static inline fat_volume get_fat_volume() {
 #define LOG_MESSAGE_SIZE 100
 #define DATE_MESSAGE_SIZE 30
 
+//Variable para ver si ya escribimos INIT.
+int initial_log = 0;
+
 static void now_to_str(char *buf) {
     time_t now = time(NULL);
     struct tm *timeinfo;
@@ -41,7 +44,7 @@ static void fat_fuse_log_write(char *text){
 
     fat_volume vol = get_fat_volume();
     //Toma el volumen disponible
-    fat_tree_node nlog = fat_tree_node_search(vol->file_tree, LOG_FILE);
+    fat_tree_node nlog = fat_tree_node_search(vol->file_tree, LOG_FILEPATH);
     //Busca el nodo asociado a la llave LOG_FILE
 
     if(nlog == NULL){
@@ -62,40 +65,6 @@ static void fat_fuse_log_write(char *text){
 
 }
 
-static int fat_fuse_log_init(void){
-    fat_volume vol = get_fat_volume();
-    fat_tree_node nlog = fat_tree_node_search(vol->file_tree, LOG_FILE);
-
-    if(nlog != NULL){
-        return 1;
-    }
-
-    int mknod_ex = fat_fuse_mknod(LOG_FILE, 0, 0);
-    if(mknod_ex != 0){
-        printf("Unable to create log file.");
-        return mknod_ex;
-    }
-
-    nlog = fat_tree_node_search(vol->file_tree, LOG_FILE); //Ahora que el nodo existe lo podemos asignar a nuestra variable
-    fat_file log_file = fat_tree_get_file(nlog); //Guardamos en nuestra variable log_file el file del log 
-
-    char buf[LOG_MESSAGE_SIZE] = "";
-    now_to_str(buf);
-    strcat(buf, "\t");
-    strcat(buf, getlogin());
-    strcat(buf, "\t");
-    strcat(buf, log_file->filepath);
-    strcat(buf, "\t");
-    strcat(buf, "init");
-    strcat(buf, "\n");
-
-    fat_fuse_log_write(buf);
-
-    fat_log_hide(log_file,fat_tree_get_parent(nlog));
-    //Para ocultar el log en todos los FS
-
-    return mknod_ex;
-}
 
 // TODO: complete this function to log to file
 static void fat_fuse_log_activity(char *operation_type, fat_file target_file)
@@ -111,6 +80,40 @@ static void fat_fuse_log_activity(char *operation_type, fat_file target_file)
     strcat(buf, "\n");
 
     fat_fuse_log_write(buf);
+}
+
+static int fat_fuse_log_init(void){
+    fat_volume vol = get_fat_volume();
+    fat_tree_node nlog = fat_tree_node_search(vol->file_tree, LOG_FILEPATH);
+
+    if(nlog != NULL){
+        return 1;
+    }
+
+    int mknod_ex = fat_fuse_mknod(LOG_FILEPATH, 0, 0);
+    if(mknod_ex != 0){
+        printf("Unable to create log file.");
+        return mknod_ex;
+    }
+
+    nlog = fat_tree_node_search(vol->file_tree, LOG_FILEPATH); //Ahora que el nodo existe lo podemos asignar a nuestra variable
+    fat_file log_file = fat_tree_get_file(nlog); //Guardamos en nuestra variable log_file el file del log 
+
+    fat_file nlog_parent = fat_tree_get_parent(nlog);
+
+    if(nlog_parent == NULL){
+        DEBUG("log parent is NULL, not able to hide");
+        return 1;
+    }
+
+    //fat_file_log_hide(log_file, nlog_parent);
+
+    //if(!initial_log){
+    fat_fuse_log_activity("INIT", log_file);
+    initial_log = 1;
+    //}
+    
+    return mknod_ex;
 }
 
 

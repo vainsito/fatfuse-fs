@@ -7,6 +7,7 @@
 #include <sys/types.h>
 
 #define FAT_FILENAME_DELETED_CHAR 0xe5
+#define PATH_SEPARATOR "/"
 
 /* Compares the bytes of @s1 and @s2.
  * FAT names can be no more than 12 characters long, so we might as well just
