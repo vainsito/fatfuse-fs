@@ -51,6 +51,8 @@ struct fuse_operations fat_fuse_operations = {
     .utime = fat_fuse_utime,
     .truncate = fat_fuse_truncate,
     .write = fat_fuse_write,
+    .rmdir = fat_fuse_rmdir,
+    .unlink = fat_fuse_unlink
 };
 
 int main(int argc, char **argv) {

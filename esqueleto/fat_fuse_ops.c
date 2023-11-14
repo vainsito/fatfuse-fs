@@ -44,7 +44,7 @@ static void fat_fuse_log_write(char *text){
 
     fat_volume vol = get_fat_volume();
     //Toma el volumen disponible
-    fat_tree_node nlog = fat_tree_node_search(vol->file_tree, LOG_FILEPATH);
+    fat_tree_node nlog = fat_tree_node_search(vol->file_tree, LOG_FILE);
     //Busca el nodo asociado a la llave LOG_FILE
 
     if(nlog == NULL){
@@ -84,35 +84,45 @@ static void fat_fuse_log_activity(char *operation_type, fat_file target_file)
 
 static int fat_fuse_log_init(void){
     fat_volume vol = get_fat_volume();
-    fat_tree_node nlog = fat_tree_node_search(vol->file_tree, LOG_FILEPATH);
+    fat_tree_node nlog = fat_tree_node_search(vol->file_tree, LOG_FILE);
 
     if(nlog != NULL){
         return 1;
     }
 
-    int mknod_ex = fat_fuse_mknod(LOG_FILEPATH, 0, 0);
+    int mknod_ex = fat_fuse_mknod(LOG_FILE, 0, 0);
     if(mknod_ex != 0){
         printf("Unable to create log file.");
         return mknod_ex;
     }
 
-    nlog = fat_tree_node_search(vol->file_tree, LOG_FILEPATH); //Ahora que el nodo existe lo podemos asignar a nuestra variable
+    nlog = fat_tree_node_search(vol->file_tree, LOG_FILE); //Ahora que el nodo existe lo podemos asignar a nuestra variable
     fat_file log_file = fat_tree_get_file(nlog); //Guardamos en nuestra variable log_file el file del log 
 
-    fat_file nlog_parent = fat_tree_get_parent(nlog);
+    // fat_file nlog_parent = fat_tree_get_parent(nlog);
 
-    if(nlog_parent == NULL){
-        DEBUG("log parent is NULL, not able to hide");
-        return 1;
-    }
+    // if(nlog_parent == NULL){
+    //     DEBUG("log parent is NULL, not able to hide");
+    //     return 1;
+    // }
 
-    //fat_file_log_hide(log_file, nlog_parent);
+    // if (log_file != NULL){
+    //     fat_log_hide(log_file, nlog_parent);
+    // //fat_fuse_log_activity("INIT", log_file);
+    // }
 
-    //if(!initial_log){
-    fat_fuse_log_activity("INIT", log_file);
-    initial_log = 1;
-    //}
-    
+    char buf[LOG_MESSAGE_SIZE] = "";
+    now_to_str(buf);
+    strcat(buf, "\t");
+    strcat(buf, getlogin());
+    strcat(buf, "\t");
+    strcat(buf, log_file->filepath);
+    strcat(buf, "\t");
+    strcat(buf, "INIT");
+    strcat(buf, "\n");
+
+    fat_fuse_log_write(buf);
+
     return mknod_ex;
 }
 
@@ -237,9 +247,8 @@ int fat_fuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
         child++;
     }
 
-    if(strcmp(path, LOG_FILE)){
-        fat_fuse_log_init();
-    }
+    fat_fuse_log_init();
+
 
     return 0;
 }
@@ -391,10 +400,11 @@ int fat_fuse_truncate(const char *path, off_t offset) {
     return -errno;
 }
 
+
 /* Delete a file */
 int fat_fuse_unlink(const char *path){
 
-    int error = 0;
+    errno = 0;
 
     //Nos ubicamos en el file con la tecnica habitual 
     fat_volume vol = get_fat_volume();
@@ -402,12 +412,22 @@ int fat_fuse_unlink(const char *path){
 
     //En un contexto como este el file deberia de existir 
     if (file_node == NULL){
-        error++;
-        return error;
+        errno = ENOENT;
+        return errno;
     }
 
     fat_file file = fat_tree_get_file(file_node);
     //Nos quedamos con el file que nos interesa borrar
+
+    if(fat_file_is_directory(file)){
+        errno = EISDIR;
+        return errno;
+    }
+
+    if (is_fs_log(file)) {
+        errno = EISDIR;
+        return errno;
+    }
 
     fat_file parent = fat_tree_get_parent(file_node);
     fat_file_free_cluster(file, parent);
@@ -415,14 +435,14 @@ int fat_fuse_unlink(const char *path){
     fat_tree_delete(vol->file_tree,path);
     //Borra el fat_file con ruta = path, y arbol = vol->tree 
 
-    return error;
+    return errno;
 
 }
 
 /* Delete a directory */
 int fat_fuse_rmdir(const char *path){
 
-    int error = 0;
+    //int error = 0;
 
     //Nos ubicamos en el file con la tecnica habitual 
     fat_volume vol = get_fat_volume();
@@ -430,18 +450,33 @@ int fat_fuse_rmdir(const char *path){
 
     //En un contexto como este el file deberia de existir 
     if (dir_node == NULL){
-        error++;
-        return error;
+        errno = ENOENT;
+        return errno;
     }
 
     fat_file directory = fat_tree_get_file(dir_node);
     //Nos quedamos con el file que nos interesa borrar
+
+    if(!fat_file_is_directory(directory)){
+        errno = ENOTDIR;
+        return errno;
+    }
     
     GList *dir_files = fat_file_read_children(directory);
     //Crea una lista con los fat_files del directorio (fat_file_read_children, separa en fat files cada una de las entradas del directorio)
+    
+    if (g_list_length(dir_files) > 0) {
+        errno = ENOTEMPTY;
+        return errno;
+    }
+
     g_list_free(dir_files);
     //Libera la estructura de cada uno de los files del directorio
 
+    // if (dir_files == NULL) {
+    //     errno =;
+    //     return errno;
+    // }
 
     fat_file parent = fat_tree_get_parent(dir_node);
     fat_file_free_cluster(directory,parent);
@@ -449,6 +484,6 @@ int fat_fuse_rmdir(const char *path){
     fat_tree_delete(vol->file_tree,path);
     //Borra el fat_file con ruta = path, y arbol = vol->tree
 
-    return error;
+    return errno;
 
 }

@@ -1,8 +1,7 @@
 #ifndef _BIG_BROTHER_H
 #define _BIG_BROTHER_H
 
-#define LOG_FILEPATH PATH_SEPARATOR LOG_FILE
-#define LOG_FILE LOG_FILE_BASENAME "." LOG_FILE_EXTENSION
+#define LOG_FILE "/fs.log"
 #define LOG_FILE_BASENAME "fs"
 #define LOG_FILE_EXTENSION "log"
 

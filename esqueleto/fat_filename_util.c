@@ -1,4 +1,5 @@
 #include "fat_filename_util.h"
+#include "big_brother.h"
 #include <stdio.h>
 
 /* Flag indicating that the character is legal to use in a filename */
@@ -83,14 +84,16 @@ void build_filename(const u8 *src_name_p, const u8 *src_extension_p,
     unsigned name_len;
     unsigned extension_len;
     int max_length = 8;
-    // Get the base name of the file or directory
-    name_len = filename_len((char *)src_name_p, max_length);
-    if (name_len == 0) {
-        *dst_name_p = '/';
-        dst_name_p++;
-        *dst_name_p = '\0';
-        return;
-    }
+
+        // Get the base name of the file or directory
+        name_len = filename_len((char *)src_name_p, max_length);
+        if (name_len == 0) {
+            *dst_name_p = '/';
+            dst_name_p++;
+            *dst_name_p = '\0';
+            return;
+        }
+    
     do {
         *dst_name_p++ = *src_name_p++;
     } while (--name_len);
