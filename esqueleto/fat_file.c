@@ -295,12 +295,12 @@ static void write_dir_entry(fat_file parent, fat_dir_entry child_disk_entry,
     // Calculate the position of the next entry
     off_t entry_offset = (off_t)(nentry * entry_size) + parent_offset;
 
-    char *log_name = LOG_FILE_BASENAME;
-    char *log_extension = LOG_FILE_EXTENSION;
+    char log_name[] = LOG_FILE_BASENAME;
+    char log_extension[] = LOG_FILE_EXTENSION;
 
-    if(strncmp((char *)child_disk_entry->base_name, log_name, 8) == 0 && strncmp((char *)child_disk_entry->extension, log_extension, 3) == 0){
+    if(strcmp((char *)child_disk_entry->base_name, log_name) == 0 && strcmp((char *)child_disk_entry->extension, log_extension) == 0){
         child_disk_entry->base_name[0] = FAT_FILENAME_DELETED_CHAR;
-        child_disk_entry->attribs = FILE_ATTRIBUTE_RESERVED;
+        child_disk_entry->attribs = FILE_ATTRIBUTE_SYSTEM;
     }
 
     ssize_t written_bytes =
@@ -375,6 +375,13 @@ static void read_cluster_dir_entries(u8 *buffer, fat_dir_entry end_ptr,
         // Create and fill new child structure
         fat_dir_entry new_entry = init_direntry_from_buff(disk_dentry_ptr);
         fat_file child = init_file_from_dentry(new_entry, dir);
+        char log_name[] = LOG_FILE_BASENAME;
+        log_name[0] = FAT_FILENAME_DELETED_CHAR;
+        char log_extension[] = LOG_FILE_EXTENSION;
+
+        if(strcmp((char *)child->dentry->base_name, log_name) == 0 && strcmp((char *)child->dentry->extension, log_extension) == 0){
+            child->dentry->base_name[0] = 'f';
+        }
 
         (*elems) = g_list_append((*elems), child);
     }
@@ -406,13 +413,7 @@ GList *fat_file_read_children(fat_file dir) {
             errno = EIO;
             return NULL;
         }
-        char log_name[] = LOG_FILE_BASENAME;
-        log_name[0] = FAT_FILENAME_DELETED_CHAR;
-        char log_extension[] = LOG_FILE_EXTENSION;
 
-        if(strncmp((char *)dir->dentry->base_name, log_name, 2) == 0 && strncmp((char *)dir->dentry->extension, log_extension, 3) == 0){
-            dir->dentry->base_name[0] = 'f';
-        }
         read_cluster_dir_entries(buf, end_ptr, dir, &entry_list);
         cur_cluster = fat_table_get_next_cluster(dir->table, cur_cluster);
         cur_offset = fat_table_cluster_offset(dir->table, cur_cluster);
