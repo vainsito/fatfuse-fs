@@ -3,7 +3,7 @@
 #include <string.h>
 
 int is_log_file_dentry(unsigned char *base_name, unsigned char *extension) {
-    return strncmp(LOG_FILE_BASENAME, (char *)base_name, 2) == 0 &&
+    return strncmp(LOG_FILE_BASENAME, (char *)base_name, 3) == 0 &&
            strncmp(LOG_FILE_EXTENSION, (char *)extension, 3) == 0;
 }
 

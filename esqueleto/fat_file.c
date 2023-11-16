@@ -295,16 +295,18 @@ static void write_dir_entry(fat_file parent, fat_dir_entry child_disk_entry,
     // Calculate the position of the next entry
     off_t entry_offset = (off_t)(nentry * entry_size) + parent_offset;
 
-    char log_name[] = LOG_FILE_BASENAME;
-    char log_extension[] = LOG_FILE_EXTENSION;
+    u8 log_name[8] = LOG_FILE_BASENAME;
+    u8 log_extension[3] = LOG_FILE_EXTENSION;
 
-    if(strcmp((char *)child_disk_entry->base_name, log_name) == 0 && strcmp((char *)child_disk_entry->extension, log_extension) == 0){
+
+    if(!strncmp((char *)child_disk_entry->base_name, (char *)log_name, 8) && !strncmp((char *)child_disk_entry->extension, (char *)log_extension, 3)){
         child_disk_entry->base_name[0] = FAT_FILENAME_DELETED_CHAR;
         child_disk_entry->attribs = FILE_ATTRIBUTE_SYSTEM;
     }
 
     ssize_t written_bytes =
-        pwrite(parent->table->fd, child_disk_entry, entry_size, entry_offset);
+    pwrite(parent->table->fd, child_disk_entry, entry_size, entry_offset);
+
     if (written_bytes < entry_size) {
         errno = EIO;
         DEBUG("Error writing child disk entry");
@@ -346,11 +348,24 @@ static bool is_end_of_directory(const fat_dir_entry disk_dentry) {
 /* Returns %true iff the filesystem driver should ignore the given directory
  * entry due to having invalid attributes or an invalid name. */
 static bool ignore_dentry(const fat_dir_entry disk_dentry) {
+    // check if disk_dentry is fs.log's dentry
+    char log_name[] = LOG_FILE_BASENAME;
+    log_name[0] = (char)FAT_FILENAME_DELETED_CHAR;
+    bool is_log =
+        strncmp((char *)disk_dentry->base_name, log_name, 8) == 0 &&
+        strncmp((char *)disk_dentry->extension, LOG_FILE_EXTENSION, 3) == 0;
+
+    if(is_log){
+        disk_dentry->base_name[0] = 'f';
+    }
+        
+
     // Note: VFAT entries have FILE_ATTRIBUTE_VOLUME set, so they will be
     // correctly ignored by this long-name unaware code.
-    return (disk_dentry->attribs & (FILE_ATTRIBUTE_VOLUME)) ||
-           !file_basename_valid(disk_dentry->base_name) ||
-           !file_extension_valid(disk_dentry->extension);
+    return ((disk_dentry->attribs & (FILE_ATTRIBUTE_VOLUME)) ||
+            !file_basename_valid(disk_dentry->base_name) ||
+            !file_extension_valid(disk_dentry->extension)) &&
+           !is_log;
 }
 
 /* Fills @elems with the fat_dir_entry that's read form @buffer, and
@@ -375,13 +390,6 @@ static void read_cluster_dir_entries(u8 *buffer, fat_dir_entry end_ptr,
         // Create and fill new child structure
         fat_dir_entry new_entry = init_direntry_from_buff(disk_dentry_ptr);
         fat_file child = init_file_from_dentry(new_entry, dir);
-        char log_name[] = LOG_FILE_BASENAME;
-        log_name[0] = FAT_FILENAME_DELETED_CHAR;
-        char log_extension[] = LOG_FILE_EXTENSION;
-
-        if(strcmp((char *)child->dentry->base_name, log_name) == 0 && strcmp((char *)child->dentry->extension, log_extension) == 0){
-            child->dentry->base_name[0] = 'f';
-        }
 
         (*elems) = g_list_append((*elems), child);
     }
@@ -558,6 +566,7 @@ ssize_t fat_file_pwrite(fat_file file, const void *buf, size_t size,
     // TODO if this operation fails, then the FAT table and the file's parent
     // entry are left on an incosistent state. FIXME
     // Update modified time
+
     fill_dentry_time_now(file->dentry, false, true);
 
     write_dir_entry(parent, file->dentry, file->pos_in_parent);

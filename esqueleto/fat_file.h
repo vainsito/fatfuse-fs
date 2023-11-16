@@ -189,8 +189,6 @@ void fat_file_truncate(fat_file file, off_t offset, fat_file parent);
 ssize_t fat_file_pwrite(fat_file file, const void *buf, size_t size,
                         off_t offset, fat_file parent);
 
-void fat_log_hide(fat_file file, fat_file parent);
-
 void fat_file_free_cluster(fat_file file, fat_file parent);
 
 

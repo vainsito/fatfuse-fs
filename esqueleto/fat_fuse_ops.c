@@ -29,6 +29,8 @@ static inline fat_volume get_fat_volume() {
 #define LOG_MESSAGE_SIZE 100
 #define DATE_MESSAGE_SIZE 30
 
+int initial_log = 0;
+
 static void now_to_str(char *buf) {
     time_t now = time(NULL);
     struct tm *timeinfo;
@@ -81,7 +83,12 @@ static void fat_fuse_log_activity(char *operation_type, fat_file target_file)
 static int fat_fuse_log_init(void){
     errno = 0;
     fat_volume vol = get_fat_volume();
-    fat_tree_node nlog = fat_tree_node_search(vol->file_tree, LOG_FILE);
+
+    
+    char hid_name[] = LOG_FILE;
+    hid_name[1] = FAT_FILENAME_DELETED_CHAR;
+
+    fat_tree_node nlog = fat_tree_node_search(vol->file_tree, hid_name);
     if(nlog == NULL){
         int mknod_ex = fat_fuse_mknod(LOG_FILE, 0, 0);
         if(mknod_ex != 0){
@@ -220,8 +227,11 @@ int fat_fuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
         }
         child++;
     }
-
-    fat_fuse_log_init();
+    if(!initial_log){
+        fat_fuse_log_init();
+        initial_log = 1;
+    }
+    
 
     return 0;
 }
