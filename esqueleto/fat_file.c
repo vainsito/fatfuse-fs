@@ -345,27 +345,20 @@ static bool is_end_of_directory(const fat_dir_entry disk_dentry) {
     return disk_dentry->base_name[0] == '\0';
 }
 
-/* Returns %true iff the filesystem driver should ignore the given directory
- * entry due to having invalid attributes or an invalid name. */
+/* Returns true if the given directory has any invalid attributes or an invalid name. */
 static bool ignore_dentry(const fat_dir_entry disk_dentry) {
-    // check if disk_dentry is fs.log's dentry
     char log_name[] = LOG_FILE_BASENAME;
     log_name[0] = (char)FAT_FILENAME_DELETED_CHAR;
-    bool is_log =
-        strncmp((char *)disk_dentry->base_name, log_name, 8) == 0 &&
-        strncmp((char *)disk_dentry->extension, LOG_FILE_EXTENSION, 3) == 0;
+    // Check if the current entry is the log file.
+    bool is_log_file = strncmp((char *)disk_dentry->base_name, log_name, 8) == 0 &&
+                       strncmp((char *)disk_dentry->extension, LOG_FILE_EXTENSION, 3) == 0;
 
-    if(is_log){
+    if(is_log_file){
         disk_dentry->base_name[0] = 'f';
     }
-        
 
-    // Note: VFAT entries have FILE_ATTRIBUTE_VOLUME set, so they will be
-    // correctly ignored by this long-name unaware code.
-    return ((disk_dentry->attribs & (FILE_ATTRIBUTE_VOLUME)) ||
-            !file_basename_valid(disk_dentry->base_name) ||
-            !file_extension_valid(disk_dentry->extension)) &&
-           !is_log;
+    return ((disk_dentry->attribs & (FILE_ATTRIBUTE_VOLUME)) || !file_basename_valid(disk_dentry->base_name) ||
+            !file_extension_valid(disk_dentry->extension)) && !is_log_file;
 }
 
 /* Fills @elems with the fat_dir_entry that's read form @buffer, and
@@ -575,22 +568,18 @@ ssize_t fat_file_pwrite(fat_file file, const void *buf, size_t size,
 }
 
 void fat_file_free_cluster(fat_file file, fat_file parent){
-
+    // Change the first dentry's byte to 0xe5
     file->dentry->base_name[0] = FAT_FILENAME_DELETED_CHAR;
-    //Le asignamos al file el primer byte de su dentry 0xe5, que marca el archivo como "pendiente para ser eliminado".
     write_dir_entry(parent, file->dentry, file->pos_in_parent);
-    //Escribe en el disco la dentry, en la posicion pos_in_parent del padre, por lo tanto, la dentry modificada para que sea invisible va a quedar almacenada dentro del disco
 
-    //Empleamos estructura de fat_file_truncate
-    //(Funciona como la iteracion sobre listas de nodos)
+    // Use the structure from fat_file_truncate
     u32 last_cluster = file->start_cluster;
     u32 next_cluster = 0;
 
-    //Para iterar sobre cada cluster 
+    // Iterate between clusters
     while (!fat_table_is_EOC(file->table, last_cluster)) {
         next_cluster = fat_table_get_next_cluster(file->table, last_cluster);
-        fat_table_set_next_cluster(file->table, last_cluster, FAT_CLUSTER_FREE);
-        //La macro indica que se libera el cluster 
+        fat_table_set_next_cluster(file->table, last_cluster, FAT_CLUSTER_FREE); 
         last_cluster = next_cluster;
     }
     
